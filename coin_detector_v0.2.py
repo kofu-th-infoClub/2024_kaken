@@ -1,22 +1,30 @@
 import cv2
 import numpy as np
 
-# 硬貨の特徴（色、穴の有無、サイズ範囲）
+# 硬貨の特徴（色範囲、穴の有無、サイズ範囲）
 COIN_FEATURES = {
-    "500": {"color": (160, 160, 160), "hole": False, "size_range": (27, 30)},  # 500円
-    "100": {"color": (180, 180, 180), "hole": False, "size_range": (22, 25)},  # 100円
-    "50": {"color": (180, 180, 180), "hole": True, "size_range": (20, 23)},    # 50円
-    "10": {"color": (90, 60, 30), "hole": False, "size_range": (23, 26)},      # 10円
-    "5": {"color": (140, 110, 50), "hole": True, "size_range": (20, 23)},      # 5円
-    "1": {"color": (200, 200, 200), "hole": False, "size_range": (17, 20)},    # 1円
+    "500": {"color_range": [(150, 150, 150), (200, 200, 200)], "hole": False, "size_range": (27, 30)},  # 500円
+    "100": {"color_range": [(170, 170, 170), (220, 220, 220)], "hole": False, "size_range": (22, 25)},  # 100円
+    "50": {"color_range": [(170, 170, 170), (220, 220, 220)], "hole": True, "size_range": (20, 23)},    # 50円
+    "10": {"color_range": [(80, 50, 20), (110, 70, 40)], "hole": False, "size_range": (23, 26)},        # 10円
+    "5": {"color_range": [(120, 90, 40), (160, 120, 60)], "hole": True, "size_range": (20, 23)},        # 5円
+    "1": {"color_range": [(190, 190, 190), (230, 230, 230)], "hole": False, "size_range": (17, 20)},    # 1円
 }
 
-# 色の近さを計算する関数
-def is_color_similar(color1, color2, threshold=50):
-    return np.linalg.norm(np.array(color1) - np.array(color2)) < threshold
+# 初期スケール（仮の値、後で校正可能）
+PIXEL_TO_MM = 1.0
+
+# マウスクリック用
+clicked_points = []
+
+def is_color_in_range(color, color_range):
+    """色が指定された範囲内か確認"""
+    lower, upper = np.array(color_range[0]), np.array(color_range[1])
+    return np.all(lower <= color) and np.all(color <= upper)
 
 def detect_coins(frame):
     """フレームから硬貨を検出し、種類と合計金額を推定"""
+    global PIXEL_TO_MM
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (11, 11), 0)
 
@@ -54,7 +62,6 @@ def detect_coins(frame):
             has_hole = np.mean(coin_center) < 50  # 中央部分が暗い場合は穴とみなす
 
             # サイズ（半径）をミリメートル換算
-            PIXEL_TO_MM = 1.0  # 仮のスケール、調整が必要
             diameter_mm = 2 * r * PIXEL_TO_MM
 
             # 硬貨の種類を推定
@@ -62,7 +69,7 @@ def detect_coins(frame):
             for value, features in COIN_FEATURES.items():
                 size_min, size_max = features["size_range"]
                 if (
-                    is_color_similar(avg_color, features["color"])
+                    is_color_in_range(avg_color, features["color_range"])
                     and has_hole == features["hole"]
                     and size_min <= diameter_mm <= size_max
                 ):
@@ -85,8 +92,28 @@ def detect_coins(frame):
 
     return frame, total_value
 
+def calibrate_scale(event, x, y, flags, param):
+    """マウスクリックで定規の2点を取得し、スケールを計算"""
+    global clicked_points, PIXEL_TO_MM
+
+    if event == cv2.EVENT_LBUTTONDOWN:
+        clicked_points.append((x, y))
+        if len(clicked_points) == 2:
+            # 2点間のピクセル距離を計算
+            pt1, pt2 = clicked_points
+            pixel_distance = np.sqrt((pt1[0] - pt2[0]) ** 2 + (pt1[1] - pt2[1]) ** 2)
+
+            # 実際の距離をユーザーに入力させる
+            real_distance_mm = float(input("実際の定規の距離（ミリメートル）を入力してください: "))
+            PIXEL_TO_MM = real_distance_mm / pixel_distance
+            print(f"スケールが設定されました: 1ピクセル = {PIXEL_TO_MM:.4f} mm")
+            clicked_points = []  # リセット
+
 def main():
+    global clicked_points
     cap = cv2.VideoCapture(0)
+    cv2.namedWindow("Coin Detector")
+    cv2.setMouseCallback("Coin Detector", calibrate_scale)
 
     while True:
         ret, frame = cap.read()
@@ -106,6 +133,10 @@ def main():
             (0, 255, 255),
             2
         )
+
+        # 定規計測のためのクリックポイントを描画
+        for point in clicked_points:
+            cv2.circle(processed_frame, point, 5, (0, 0, 255), -1)
 
         cv2.imshow("Coin Detector", processed_frame)
 
