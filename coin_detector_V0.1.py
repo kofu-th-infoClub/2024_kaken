@@ -1,14 +1,14 @@
 import cv2
 import numpy as np
 
-# 硬貨の色と穴の有無による特徴（調整可能）
+# 硬貨の特徴（色、穴の有無、サイズ範囲）
 COIN_FEATURES = {
-    "500": {"color": (13, 1, 2), "hole": False},  # 500円: 銀色, 穴なし
-    "100": {"color": (140, 140, 140), "hole": False},  # 100円: 銀色, 穴なし
-    "50": {"color": (180, 180, 180), "hole": True},    # 50円: 銀色, 穴あり
-    "10": {"color": (90, 60, 30), "hole": False},      # 10円: 銅色, 穴なし
-    "5": {"color": (140, 110, 50), "hole": True},      # 5円: 金色, 穴あり
-    "1": {"color": (100, 100,100), "hole": False},    # 1円: 明るい銀色, 穴なし
+    "500": {"color": (160, 160, 160), "hole": False, "size_range": (27, 30)},  # 500円
+    "100": {"color": (180, 180, 180), "hole": False, "size_range": (22, 25)},  # 100円
+    "50": {"color": (180, 180, 180), "hole": True, "size_range": (20, 23)},    # 50円
+    "10": {"color": (90, 60, 30), "hole": False, "size_range": (23, 26)},      # 10円
+    "5": {"color": (140, 110, 50), "hole": True, "size_range": (20, 23)},      # 5円
+    "1": {"color": (200, 200, 200), "hole": False, "size_range": (17, 20)},    # 1円
 }
 
 # 色の近さを計算する関数
@@ -53,10 +53,19 @@ def detect_coins(frame):
 
             has_hole = np.mean(coin_center) < 50  # 中央部分が暗い場合は穴とみなす
 
+            # サイズ（半径）をミリメートル換算
+            PIXEL_TO_MM = 1.0  # 仮のスケール、調整が必要
+            diameter_mm = 2 * r * PIXEL_TO_MM
+
             # 硬貨の種類を推定
             coin_type = "undefined"
             for value, features in COIN_FEATURES.items():
-                if is_color_similar(avg_color, features["color"]) and has_hole == features["hole"]:
+                size_min, size_max = features["size_range"]
+                if (
+                    is_color_similar(avg_color, features["color"])
+                    and has_hole == features["hole"]
+                    and size_min <= diameter_mm <= size_max
+                ):
                     coin_type = value
                     total_value += int(coin_type)
                     break
