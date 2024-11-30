@@ -12,6 +12,6 @@ WEBカメラ等のPCに接続されたキャプチャデバイスから画像を
 ## **Tested Environment**
 
 - Python 3.10.6 or Later
-- opencv-contrib-python 最新バージョン
-- numpy 最新バージョン
+　- opencv-contrib-python 最新バージョン
+　- numpy 最新バージョン
 - Windows11 or 10（その他OSについては未確認ですが動作する気はします）
